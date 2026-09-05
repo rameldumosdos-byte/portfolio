@@ -1,36 +1,38 @@
-FROM php:8.2-cli
+FROM dunglas/frankenphp:php8.2-bookworm
 
-WORKDIR /var/www/html
-
-RUN apt-get update \
-    && apt-get install -y \
-        git \
-        unzip \
-        libzip-dev \
-    && docker-php-ext-install zip \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY . .
 
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader
+RUN apt-get update \
+    && apt-get install -y \
+        unzip \
+        git \
+        libzip-dev \
+        nodejs \
+        npm \
+    && docker-php-ext-install zip \
+    && npm install \
+    && npm run build \
+    && composer install \
+        --no-dev \
+        --no-interaction \
+        --prefer-dist \
+        --optimize-autoloader \
+    && mkdir -p storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache \
+    && php artisan optimize:clear \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
-    storage/logs \
-    bootstrap/cache
-
-RUN chmod -R 775 storage bootstrap/cache
-
-RUN php artisan optimize:clear
+ENV SERVER_NAME=:80
 
 EXPOSE 80
 
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
+CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]
